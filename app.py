@@ -233,6 +233,10 @@ class AuditDataGenerator:
         self.fake = Faker('ko_KR')
         self.employees = [self.fake.name() for _ in range(50)]
         self.departments = ['IB사업부', '리테일금융팀', 'IT개발팀', '리스크관리팀', '인사팀', '법인영업팀']
+        # Assign home regions to employees (excluding Yeouido which is the office location)
+        self.regions = ['강남구', '서초구', '송파구', '마포구', '용산구', '성동구', '분당구', '일산']
+        self.office_region = '영등포구(여의도)'
+        self.employee_homes = {emp: random.choice(self.regions) for emp in self.employees}
         
     def generate_base_data(self, n_rows=10000):
         data = []
@@ -245,12 +249,22 @@ class AuditDataGenerator:
                                       minutes=random.randint(0, 59))
             is_holiday = dt.weekday() >= 5 # 5=Sat, 6=Sun
             
+            emp_name = random.choice(self.employees)
+            
+            # Normal transactions mostly happen near office or business districts
+            if random.random() < 0.8:
+                merchant_region = self.office_region
+            else:
+                merchant_region = random.choice(self.regions + ['종로구', '중구'])
+                
             row = {
                 'transaction_time': dt,
                 'amount': round(random.lognormvariate(10, 1) * 1000, -2), # Log-normal distribution
                 'merchant_name': self.fake.company() + " 식당",
+                'merchant_region': merchant_region,
                 'mcc_code': '일반음식점',
-                'employee_name': random.choice(self.employees),
+                'employee_name': emp_name,
+                'home_region': self.employee_homes[emp_name],
                 'department': random.choice(self.departments),
                 'is_holiday': is_holiday,
                 'anomaly_type': 'Normal'
@@ -268,6 +282,7 @@ class AuditDataGenerator:
             emp = random.choice(self.employees)
             dept = random.choice(self.departments)
             merchant = "한우 오마카세 " + self.fake.word()
+            region = self.office_region # Usually near office
             
             total_amount = random.randint(500000, 1500000)
             split_count = random.randint(2, 4)
@@ -278,8 +293,10 @@ class AuditDataGenerator:
                     'transaction_time': base_time + timedelta(minutes=i*2),
                     'amount': amount_per_txn,
                     'merchant_name': merchant,
+                    'merchant_region': region,
                     'mcc_code': '일반음식점',
                     'employee_name': emp,
+                    'home_region': self.employee_homes[emp],
                     'department': dept,
                     'is_holiday': base_time.weekday() >= 5,
                     'anomaly_type': 'Split Payment'
@@ -289,13 +306,16 @@ class AuditDataGenerator:
         for _ in range(20):
             base_time = df['transaction_time'].sample().values[0]
             base_time = pd.to_datetime(base_time).replace(hour=random.choice([23, 0, 1, 2, 3]))
+            emp = random.choice(self.employees)
             
             anomalies.append({
                 'transaction_time': base_time,
                 'amount': random.randint(200000, 800000),
                 'merchant_name': random.choice(['강남 룸싸롱', 'VIP 노래방', '황제 유흥주점']),
+                'merchant_region': '강남구', # Entertainment district
                 'mcc_code': '유흥주점',
-                'employee_name': random.choice(self.employees),
+                'employee_name': emp,
+                'home_region': self.employee_homes[emp],
                 'department': random.choice(self.departments),
                 'is_holiday': base_time.weekday() >= 5,
                 'anomaly_type': 'Restricted Time/Sector'
@@ -305,16 +325,43 @@ class AuditDataGenerator:
         for _ in range(15):
             base_time = df['transaction_time'].sample().values[0]
             base_time = pd.to_datetime(base_time)
+            emp = random.choice(self.employees)
             
             anomalies.append({
                 'transaction_time': base_time,
                 'amount': random.randint(150000, 400000),
                 'merchant_name': '시크릿 Bar ' + self.fake.word(),
+                'merchant_region': random.choice(self.regions), # Random location
                 'mcc_code': '일반음식점', # Disguised as restaurant
-                'employee_name': random.choice(self.employees),
+                'employee_name': emp,
+                'home_region': self.employee_homes[emp],
                 'department': random.choice(self.departments),
                 'is_holiday': base_time.weekday() >= 5,
                 'anomaly_type': 'Clean Card Violation'
+            })
+
+        # Scenario D: Personal Expense Near Home (자택 근처 결제)
+        for _ in range(25):
+            base_time = df['transaction_time'].sample().values[0]
+            base_time = pd.to_datetime(base_time)
+            # Weekend or Late Night usually
+            if random.random() > 0.5:
+                base_time = base_time.replace(hour=random.choice([20, 21, 22, 10, 11])) # Late night or weekend brunch
+            
+            emp = random.choice(self.employees)
+            home = self.employee_homes[emp]
+            
+            anomalies.append({
+                'transaction_time': base_time,
+                'amount': random.randint(50000, 200000), # Not necessarily huge amount
+                'merchant_name': f"{home} {self.fake.word()} 마트",
+                'merchant_region': home, # Match Home Region
+                'mcc_code': '마트/편의점',
+                'employee_name': emp,
+                'home_region': home,
+                'department': random.choice(self.departments),
+                'is_holiday': True, # Often weekends
+                'anomaly_type': 'Personal Expense (Near Home)'
             })
             
         return pd.concat([df, pd.DataFrame(anomalies)], ignore_index=True)
@@ -331,6 +378,9 @@ class AnomalyDetector:
         df['day_of_week'] = df['transaction_time'].dt.dayofweek
         df['is_weekend'] = df['day_of_week'].apply(lambda x: 1 if x >= 5 else 0)
         
+        # New Feature: Is Near Home?
+        df['is_near_home'] = (df['merchant_region'] == df['home_region']).astype(int)
+        
         # Encode Categorical Variables
         le_dept = LabelEncoder()
         df['department_encoded'] = le_dept.fit_transform(df['department'])
@@ -339,7 +389,7 @@ class AnomalyDetector:
         df['mcc_code_encoded'] = le_mcc.fit_transform(df['mcc_code'])
         
         # Select Features for Training
-        features = ['amount', 'hour', 'is_weekend', 'department_encoded', 'mcc_code_encoded']
+        features = ['amount', 'hour', 'is_weekend', 'department_encoded', 'mcc_code_encoded', 'is_near_home']
         X = df[features]
         y = df['target']
         
@@ -726,6 +776,8 @@ class GenAISimulator:
             prompt_context = "심야/휴일 제한 업종(유흥) 결제 의심"
         elif "Clean" in str(anomaly_row.get('anomaly_type', '')):
             prompt_context = "클린카드 금지 업종 위장 결제 의심"
+        elif "Personal" in str(anomaly_row.get('anomaly_type', '')):
+            prompt_context = "자택 인근 사적 유용 의심 (Personal Expense Near Home)"
         else:
             prompt_context = "통상적이지 않은 고액 결제 패턴"
 
