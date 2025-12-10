@@ -231,8 +231,10 @@ class AuditDataGenerator:
     """Generates synthetic corporate card data with injected anomalies."""
     def __init__(self):
         self.fake = Faker('ko_KR')
-        self.employees = [self.fake.name() for _ in range(50)]
-        self.departments = ['IB사업부', '리테일금융팀', 'IT개발팀', '리스크관리팀', '인사팀', '법인영업팀']
+        self.fake = Faker('ko_KR')
+        # Masked names for demo privacy
+        self.employees = ['김OO'] * 30
+        self.departments = ['OO팀'] * 10
         # Assign home regions to employees (excluding Yeouido which is the office location)
         self.regions = ['강남구', '서초구', '송파구', '마포구', '용산구', '성동구', '분당구', '일산']
         self.office_region = '영등포구(여의도)'
