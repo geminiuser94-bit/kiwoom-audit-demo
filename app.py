@@ -263,9 +263,9 @@ class AuditDataGenerator:
                 'merchant_name': self.fake.company() + " 식당",
                 'merchant_region': merchant_region,
                 'mcc_code': '일반음식점',
-                'employee_name': emp_name,
+                'employee_name': '김OO',
                 'home_region': self.employee_homes[emp_name],
-                'department': random.choice(self.departments),
+                'department': 'OO팀',
                 'is_holiday': is_holiday,
                 'anomaly_type': 'Normal'
             }
@@ -295,9 +295,9 @@ class AuditDataGenerator:
                     'merchant_name': merchant,
                     'merchant_region': region,
                     'mcc_code': '일반음식점',
-                    'employee_name': emp,
+                    'employee_name': '김OO',
                     'home_region': self.employee_homes[emp],
-                    'department': dept,
+                    'department': 'OO팀',
                     'is_holiday': base_time.weekday() >= 5,
                     'anomaly_type': 'Split Payment'
                 })
@@ -314,9 +314,9 @@ class AuditDataGenerator:
                 'merchant_name': random.choice(['강남 룸싸롱', 'VIP 노래방', '황제 유흥주점']),
                 'merchant_region': '강남구', # Entertainment district
                 'mcc_code': '유흥주점',
-                'employee_name': emp,
+                'employee_name': '김OO',
                 'home_region': self.employee_homes[emp],
-                'department': random.choice(self.departments),
+                'department': 'OO팀',
                 'is_holiday': base_time.weekday() >= 5,
                 'anomaly_type': 'Restricted Time/Sector'
             })
@@ -333,9 +333,9 @@ class AuditDataGenerator:
                 'merchant_name': '시크릿 Bar ' + self.fake.word(),
                 'merchant_region': random.choice(self.regions), # Random location
                 'mcc_code': '일반음식점', # Disguised as restaurant
-                'employee_name': emp,
+                'employee_name': '김OO',
                 'home_region': self.employee_homes[emp],
-                'department': random.choice(self.departments),
+                'department': 'OO팀',
                 'is_holiday': base_time.weekday() >= 5,
                 'anomaly_type': 'Clean Card Violation'
             })
@@ -357,9 +357,9 @@ class AuditDataGenerator:
                 'merchant_name': f"{home} {self.fake.word()} 마트",
                 'merchant_region': home, # Match Home Region
                 'mcc_code': '마트/편의점',
-                'employee_name': emp,
+                'employee_name': '김OO',
                 'home_region': home,
-                'department': random.choice(self.departments),
+                'department': 'OO팀',
                 'is_holiday': True, # Often weekends
                 'anomaly_type': 'Personal Expense (Near Home)'
             })
